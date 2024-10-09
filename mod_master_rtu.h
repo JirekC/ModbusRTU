@@ -108,6 +108,10 @@ int main(void)
 #ifndef SYSTEM_MOD_MASTER_RTU_H
 #define SYSTEM_MOD_MASTER_RTU_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 
 /**
@@ -265,5 +269,9 @@ void ModMasterRxDoneCallback(modMasterStack_t* mstack, const uint8_t* msg, uint1
  */
 void ModMasterRxErrorCallback(modMasterStack_t* mstack);
 /** @} */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
