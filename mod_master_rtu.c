@@ -3,11 +3,14 @@
 #include "mod_master_rtu.h"
 #include <crc.h>
 
-//MODBUS commands
+// MODBUS commands
 #define MODBUS_OPCODE_READ_OUT_REGS     0x03
 #define MODBUS_OPCODE_READ_INP_REGS     0x04
 #define MODBUS_OPCODE_WRITE_MULTI_REGS  0x10
 #define MODBUS_OPCODE_DIAGNOSTIC        0x08
+// custom user defined commands
+#define MODBUS_OPCODE_READ_DATA_PACKET  0x64
+#define MODBUS_OPCODE_WRITE_DATA_PACKET 0x65
 
 int16_t ModMasterInit (modMasterStack_t* mstack)
 {
@@ -32,7 +35,7 @@ static int16_t ModMasterSend (modMasterStack_t* mstack)
     // check msg length 256Bytes total (254 + space for 2 CRC)
     if (mstack->messageLast > 253)
     {
-        retval = -1;
+        retval = -2;
     }
     else
     {
@@ -41,7 +44,7 @@ static int16_t ModMasterSend (modMasterStack_t* mstack)
         mstack->message[(++mstack->messageLast)] = (uint8_t)(crc >> 8);
         //reserve the bus for us
         mstack->status = eMOD_M_STATE_TRANSMITTING;
-        if (mstack->pfSend((uint8_t*)mstack->message, mstack->messageLast + 1) < 0) {
+        if (mstack->pfSend(mstack, (uint8_t*)mstack->message, mstack->messageLast + 1) < 0) {
             retval = -3;
             mstack->status = eMOD_M_STATE_HW_ERROR;
         }
@@ -65,7 +68,7 @@ int16_t ModMasterReadRegs(modMasterStack_t* mstack, uint8_t modAddress, uint16_t
     mstack->opCode = MODBUS_OPCODE_READ_OUT_REGS;
     mstack->firstReg = first;
     mstack->numRegs = num;
-    mstack->registers = regs;
+    mstack->dataStorage = regs;
 
     mstack->message[0] = modAddress;
     mstack->message[1] = mstack->opCode;
@@ -110,6 +113,53 @@ int16_t ModMasterWriteRegs(modMasterStack_t* mstack, uint8_t modAddress, uint16_
     return ModMasterSend(mstack);
 }
 
+int16_t ModMasterReadDataPacket(modMasterStack_t* mstack, uint8_t modAddress, uint8_t* length, uint8_t* data)
+{
+    if( mstack->status != eMOD_M_STATE_STANDBY )
+    {
+        return -1; // stack is busy
+    }
+    if( data == NULL )
+    {
+        return -2; // wrong params
+    }
+
+    mstack->slaveAddr = modAddress;
+    mstack->opCode = MODBUS_OPCODE_READ_DATA_PACKET;
+    mstack->dataStorage = data;
+    mstack->dataStorage2 = length;
+
+    mstack->message[0] = modAddress;
+    mstack->message[1] = mstack->opCode;
+    mstack->messageLast = 1;
+
+    return ModMasterSend(mstack);
+}
+
+int16_t ModMasterWriteDataPacket(modMasterStack_t* mstack, uint8_t modAddress, uint8_t length, const uint8_t* data)
+{
+    if( mstack->status != eMOD_M_STATE_STANDBY )
+    {
+        return -1; // stack is busy
+    }
+    if( length > 251 || data == NULL )
+    {
+        return -2; // wrong params
+    }
+
+    mstack->slaveAddr = modAddress;
+    mstack->opCode = MODBUS_OPCODE_WRITE_DATA_PACKET;
+    mstack->numRegs = length; // store length for later check
+
+    mstack->message[0] = modAddress;
+    mstack->message[1] = mstack->opCode;
+    mstack->message[2] = length;
+    memcpy(mstack->message + 3, data, length);
+    mstack->messageLast = 2 + length;
+
+    return ModMasterSend(mstack);
+}
+
 // process answer PDU - check if everything is OK
 static void ModMasterProcessAnswer(modMasterStack_t* mstack)
 {
@@ -147,7 +197,7 @@ static void ModMasterProcessAnswer(modMasterStack_t* mstack)
                     // copy register-values (validity of pointer already checked in ModMasterReadRegs())
                     for (uint16_t i = 0; i < mstack->numRegs; i++)
                     {
-                        mstack->registers[i] = ((uint16_t)(mstack->message[3 + 2 * i]) << 8) | mstack->message[4 + 2 * i];
+                        ((uint16_t*)mstack->dataStorage)[i] = ((uint16_t)(mstack->message[3 + 2 * i]) << 8) | mstack->message[4 + 2 * i];
                     }
                     mstack->status = eMOD_M_STATE_PROCESSED;
                 }
@@ -171,6 +221,35 @@ static void ModMasterProcessAnswer(modMasterStack_t* mstack)
                     {
                         mstack->status = eMOD_M_STATE_CORRUPTED;
                     }
+                }
+                break;
+
+            case MODBUS_OPCODE_READ_DATA_PACKET:
+                if (mstack->messageLast < 2 ||
+                    mstack->messageLast != (2 + mstack->message[2]))
+                {
+                    mstack->status = eMOD_M_STATE_CORRUPTED;
+                }
+                else
+                {
+                    memcpy(mstack->dataStorage, mstack->message + 3, mstack->message[2]);
+                    if (mstack->dataStorage2 != NULL)
+                    {
+                        *((uint8_t*)mstack->dataStorage2) = mstack->message[2];
+                    }
+                    mstack->status = eMOD_M_STATE_PROCESSED;
+                }
+                break;
+
+            case MODBUS_OPCODE_WRITE_DATA_PACKET:
+                if (mstack->messageLast != 2 ||
+                    mstack->message[2] != mstack->numRegs)
+                {
+                    mstack->status= eMOD_M_STATE_CORRUPTED;
+                }
+                else
+                {
+                    mstack->status = eMOD_M_STATE_PROCESSED;
                 }
                 break;
 
@@ -293,7 +372,7 @@ void ModMasterTxDoneCallback(modMasterStack_t* mstack)
     if (mstack->status == eMOD_M_STATE_TRANSMITTING)
     {
         mstack->status = eMOD_M_STATE_WAITING_ANSWER;
-        if (mstack->pfReceive() < 0) {
+        if (mstack->pfReceive(mstack) < 0) {
             mstack->status = eMOD_M_STATE_HW_ERROR;
         }
         mstack->rxStartTime = MODBUS_GET_TIME_ISR_MS;
