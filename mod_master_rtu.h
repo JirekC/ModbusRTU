@@ -195,8 +195,9 @@ typedef struct
     uint8_t                     slaveAddr;      ///< address of slave device for command on the fly
     uint8_t                     opCode;         ///< operation code of command on the fly
     uint16_t                    firstReg;       ///< first register of R/W operation
-    uint16_t                    numRegs;        ///< number of registers to read or write
-    uint16_t*                   registers;      ///< user defined storage for rx or tx register-values
+    uint16_t                    numRegs;        ///< amount of data to read or write
+    void*                       dataStorage;    ///< user defined storage for rx or tx data
+    void*                       dataStorage2;   ///< extra user defined storage
     uint16_t volatile           messageLast;    ///< total length of MODBUS message - 1
     uint8_t                     message[257];   ///< the message
 } modMasterStack_t;
@@ -216,7 +217,9 @@ int16_t ModMasterInit(modMasterStack_t* mstack);
  * @param modAddress    Slave device address
  * @param first         Address of first register
  * @param num           Number of registers to read
- * @param regs          Storage, it's caller responsibility to allocate enough space
+ * @param regs          Storage, it's caller responsibility to allocate enough space.
+ *                      Data are valid only after success finish of operation
+ *                      @ref ModMasterCheck() reports eMOD_M_STATE_PROCESSED.
  * @return int16_t      0 initialization successful, -1 stack is busy, -2 wrong params,
  *                      -3 HW error (next call of @ref ModMasterCheck() will report eMOD_M_STATE_HW_ERROR)
  */
@@ -234,6 +237,32 @@ int16_t ModMasterReadRegs(modMasterStack_t* mstack, uint8_t modAddress, uint16_t
  *                      -3 HW error (next call of @ref ModMasterCheck() will report eMOD_M_STATE_HW_ERROR)
  */
 int16_t ModMasterWriteRegs(modMasterStack_t* mstack, uint8_t modAddress, uint16_t first, uint16_t num, const uint16_t* regs);
+
+/**
+ * @brief               Initialize reading of one data packet (custom user defined Modbus operation) from slave device.
+ *
+ * @param mstack        Pointer to modbus stack structure
+ * @param modAddress    Slave device address
+ * @param length        Length of received data [in bytes] will be stored into this variable, can be NULL
+ * @param data          Storage, it's caller responsibility to allocate enough space.
+ *                      Data are valid only after success finish of operation
+ *                      @ref ModMasterCheck() reports eMOD_M_STATE_PROCESSED.
+ * @return int16_t      0 initialization successful, -1 stack is busy, -2 wrong params,
+ *                      -3 HW error (next call of @ref ModMasterCheck() will report eMOD_M_STATE_HW_ERROR)
+ */
+int16_t ModMasterReadDataPacket(modMasterStack_t* mstack, uint8_t modAddress, uint8_t* length, uint8_t* data);
+
+/**
+ * @brief               Initialize writing of one data packet (custom user defined Modbus operation) to slave device.
+ *
+ * @param mstack        Pointer to modbus stack structure
+ * @param modAddress    Slave device address
+ * @param length        Number of bytes to write, max 251
+ * @param data          Data to be sent
+ * @return int16_t      0 initialization successful, -1 stack is busy, -2 wrong params,
+ *                      -3 HW error (next call of @ref ModMasterCheck() will report eMOD_M_STATE_HW_ERROR)
+ */
+int16_t ModMasterWriteDataPacket(modMasterStack_t* mstack, uint8_t modAddress, uint8_t length, const uint8_t* data);
 
 /**
  * @brief               Main function of Modbus stack. Has to be called periodically until operation is finished.
