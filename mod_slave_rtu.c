@@ -3,11 +3,14 @@
 #include "mod_slave_rtu.h"
 #include "crc.h"
 
-//MODBUS commands
+// MODBUS commands
 #define MODBUS_OPCODE_READ_OUT_REGS     0x03
 #define MODBUS_OPCODE_READ_INP_REGS     0x04
 #define MODBUS_OPCODE_WRITE_MULTI_REGS  0x10
 #define MODBUS_OPCODE_DIAGNOSTIC        0x08
+// custom user defined commands
+#define MODBUS_OPCODE_READ_DATA_PACKET  0x64
+#define MODBUS_OPCODE_WRITE_DATA_PACKET 0x65
 
 int16_t ModSlaveInit (modSlaveStack_t* mstack)
 {
@@ -190,6 +193,46 @@ static int16_t ModSlaveProcessCommand(modSlaveStack_t* mstack)
             }
             break;
 
+        case MODBUS_OPCODE_READ_DATA_PACKET:
+            if (mstack->messageLast != 2)
+            {
+                ModSlaveErrorReport(mstack, MODBUS_ERR_ILLEGAL_VALUE);
+                retval = -1;
+            }
+            else
+            {
+                uint8_t r = mstack->pfGetPacket(mstack, mstack->message + 3, &i);
+                if (r > 0)
+                {
+                    ModSlaveErrorReport(mstack, r);
+                    retval = -1;
+                }
+                else if (i > 251)
+                {
+                    // internal fault - pfGetPacket callback returned too long packet
+                    ModSlaveErrorReport(mstack, MODBUS_ERR_DEVICE_FAULT);
+                    retval = -1;
+                }
+                else
+                {
+                    mstack->message[2] = (uint8_t)i; // length of data
+                    mstack->messageLast = i + 2;
+                }
+            }
+            break;
+
+        case MODBUS_OPCODE_WRITE_DATA_PACKET:
+            if (mstack->messageLast != (mstack->message[2] + 2))
+            {
+                ModSlaveErrorReport(mstack, MODBUS_ERR_ILLEGAL_VALUE);
+                retval = -1;
+            }
+            else
+            {
+                mstack->pfSetPacket(mstack, mstack->message + 3, mstack->message[2]);
+                mstack->messageLast = 2; // answer
+            }
+            break;
 
         //unsupported opcode
         default:

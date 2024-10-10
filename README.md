@@ -1,7 +1,18 @@
 # Simple implementation of Modbus RTU master and slave stack.
 
-Can be used with UART-style communication - RS-485 or similar standard.
 Does not need any RTOS only ModMasterCheck() or ModSlaveCheck() has to be periodically called.
+Can be used with UART-style communication - RS-485 or similar standard.
+Only implements Holding registers read and write commands from Modbus standard. This is because of simplicity. User can easily implement other commands if needed.
+
+In addition to Modbus specification it implements two more custom user-define opcodes:
+
+| OPCODE | Name | Description |
+| --- | --- | --- |
+| 0x64 | ReadDataPacket | Read packetized data from slave device in FIFO style |
+| 0x65 | WriteDataPacket | Write packetized data to slave device in FIFO style |
+
+It can be used if there is a stream of data packets that need to be transferred from/to the slave device. For example, packets received from another medium such as LoRa radio communication module, etc. In this case, standard modbus registers are used to read/write radio configuration and ReadDataPacket/WriteDataPacket to receive/transmitt actual data.
+Please consult source code to see more details how to use it.
 
 ## Example of usage of MASTER stack (STM32 HAL used)
 ~~~
@@ -159,6 +170,7 @@ int16_t U2SendAnswer(modSlaveStack_t* mstack, const uint8_t* data, uint16_t leng
     return 0;
 }
 
+// will be called for every single register-read operation
 uint8_t GetModReg(modSlaveStack_t* mstack, uint16_t regAddr, uint16_t * regValue)
 {
     (void)mstack;
@@ -192,6 +204,7 @@ uint8_t GetModReg(modSlaveStack_t* mstack, uint16_t regAddr, uint16_t * regValue
     return retval;
 }
 
+// will be called for every single register-write operation
 uint8_t SetModReg(modSlaveStack_t* mstack, uint16_t regAddr, uint16_t regValue)
 {
     (void)mstack;
@@ -227,6 +240,24 @@ uint8_t SetModReg(modSlaveStack_t* mstack, uint16_t regAddr, uint16_t regValue)
     return retval;
 }
 
+// callbacks for custom user defined opcodes --->
+uint8_t packet[251] = "Hello!";
+
+uint8_t GetModPacket(modSlaveStack_t* mstack, uint8_t* buffer, uint16_t* length)
+{
+    *length = strlen(packet) + 1; // terminating null
+    *length = *length > 251 ? 251 : *length;
+    memcpy(buffer, packet, *length);
+    return 0;
+}
+
+uint8_t SetModPacket(modSlaveStack_t* mstack, const uint8_t* buffer, uint16_t length)
+{
+    memcpy(packet, buffer, length);
+    return 0;
+}
+// <---
+
 // initialisation procedure
 
 void ModbusUARTInit(uint8_t address)
@@ -238,6 +269,11 @@ void ModbusUARTInit(uint8_t address)
     myModbusStack.pfSendAns = &U2SendAnswer;
     myModbusStack.pfGetReg = &GetModReg;
     myModbusStack.pfSetReg = &SetModReg;
+
+// callbacks for custom user defined opcodes --->
+    myModbusStack.pfGetPacket = &GetModPacket;
+    myModbusStack.pfSetPacket = &SetModPacket;
+// <---
 
     ModSlaveInit(&myModbusStack);
 

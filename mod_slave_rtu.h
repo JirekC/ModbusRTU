@@ -49,6 +49,13 @@ typedef struct modSlaveStack_s modSlaveStack_t;
 typedef int16_t (*pfModSStandby_t) (modSlaveStack_t* mstack);
 
 /**
+ * @brief   User will pass pointer to function that sends @b data which are @b length bytes long over the UART.
+ * @note    After successfull Tx, user has to call @ref ModSlaveTxDoneCallback().
+ * @return  0 if everything OK, negative value in case of failure.
+ */
+typedef int16_t (*pfModSSendAns_t) (modSlaveStack_t* mstack, const uint8_t* data, uint16_t length);
+
+/**
  * @brief   User will pass pointer to function that reads value of modbus register at address @b regAddr into @b *regValue
  * @return  0 if everything OK or @ref ModbusErrors code if fails (e.g. register doesn't exists)
  */
@@ -61,11 +68,19 @@ typedef uint8_t (*pfModSGetReg_t) (modSlaveStack_t* mstack, uint16_t regAddr, ui
 typedef uint8_t (*pfModSSetReg_t) (modSlaveStack_t* mstack, uint16_t regAddr, uint16_t regValue);
 
 /**
- * @brief   User will pass pointer to function that sends @b data which are @b length bytes long over the UART.
- * @note    After successfull Tx, user has to call @ref ModSlaveTxDoneCallback().
- * @return  0 if everything OK, negative value in case of failure.
+ * @brief   User will pass pointer to function that store packet from local FIFO to @b buffer and its lenth to @b length
+ * @warning Maximum length of single packet is 251 Bytes
+ * @return  0 if everything OK or @ref ModbusErrors code if fails (e.g. register doesn't exists)
  */
-typedef int16_t (*pfModSSendAns_t) (modSlaveStack_t* mstack, const uint8_t* data, uint16_t length);
+typedef uint8_t (*pfModSGetPacket_t) (modSlaveStack_t* mstack, uint8_t* buffer, uint16_t* length);
+
+/**
+ * @brief   User will pass pointer to function that store packet from master (in @b buffer) to local FIFO.
+ *          Lenght of packet is @b length bytes.
+ * @note    Maximum length of single packet is 251 Bytes
+ * @return  0 if everything OK or @ref ModbusErrors code if fails (e.g. register doesn't exists)
+ */
+typedef uint8_t (*pfModSSetPacket_t) (modSlaveStack_t* mstack, const uint8_t* buffer, uint16_t length);
 /** @} */
 
 /**
@@ -75,14 +90,16 @@ typedef int16_t (*pfModSSendAns_t) (modSlaveStack_t* mstack, const uint8_t* data
 struct modSlaveStack_s
 {
     void*                       userContent;    ///< user defined pointer, can by used to pass anything
-	modSlaveState_t volatile    status;         ///< status of MODBUS engine
+    modSlaveState_t volatile    status;         ///< status of MODBUS engine
     uint8_t                     address;        ///< this module address
     uint16_t                    lastReg;        ///< last valid register
 
     pfModSStandby_t             pfStandby;      ///< called from ModSlaveCheck() when eMOD_S_STATE_STANDBY; has to turn on receiver; eMOD_S_STATE_RECEIVING than
+    pfModSSendAns_t             pfSendAns;      ///< send answer function
     pfModSGetReg_t              pfGetReg;       ///< get register function
     pfModSSetReg_t              pfSetReg;       ///< set register function
-    pfModSSendAns_t             pfSendAns;      ///< send answer function
+    pfModSGetPacket_t           pfGetPacket;    ///< get packet from local FIFO to be sent to master
+    pfModSSetPacket_t           pfSetPacket;    ///< store packet from incomming message to local FIFO
 
     uint16_t volatile           messageLast;    ///< total lengh of MODBUS message - 1
     uint8_t                     message[257];   ///< the message
@@ -104,6 +121,10 @@ int16_t ModSlaveInit(modSlaveStack_t* mstack);
 int16_t ModSlaveCheck(modSlaveStack_t* mstack);
 
 /**
+ * @ingroup ModbusSlaveCb
+ * @{
+ */
+/**
  * @brief           Called by HW driver when full message received
  * @param mstack    pointer to modbus stack structure
  * @param msg       message payload
@@ -122,6 +143,9 @@ void ModSlaveRxErrorCallback(modSlaveStack_t* mstack);
  * @param mstack    pointer to modbus stack structure
  */
 void ModSlaveTxDoneCallback(modSlaveStack_t* mstack);
+/**
+ * @}
+ */
 
 #ifdef __cplusplus
 }
