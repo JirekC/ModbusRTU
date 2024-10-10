@@ -44,7 +44,7 @@ static int16_t ModMasterSend (modMasterStack_t* mstack)
         mstack->message[(++mstack->messageLast)] = (uint8_t)(crc >> 8);
         //reserve the bus for us
         mstack->status = eMOD_M_STATE_TRANSMITTING;
-        if (mstack->pfSend((uint8_t*)mstack->message, mstack->messageLast + 1) < 0) {
+        if (mstack->pfSend(mstack, (uint8_t*)mstack->message, mstack->messageLast + 1) < 0) {
             retval = -3;
             mstack->status = eMOD_M_STATE_HW_ERROR;
         }
@@ -372,7 +372,7 @@ void ModMasterTxDoneCallback(modMasterStack_t* mstack)
     if (mstack->status == eMOD_M_STATE_TRANSMITTING)
     {
         mstack->status = eMOD_M_STATE_WAITING_ANSWER;
-        if (mstack->pfReceive() < 0) {
+        if (mstack->pfReceive(mstack) < 0) {
             mstack->status = eMOD_M_STATE_HW_ERROR;
         }
         mstack->rxStartTime = MODBUS_GET_TIME_ISR_MS;
