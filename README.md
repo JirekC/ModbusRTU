@@ -1,4 +1,3 @@
-@mainpage
 # Simple implementation of Modbus RTU master and slave stack.
 
 Can be used with UART-style communication - RS-485 or similar standard.

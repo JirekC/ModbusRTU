@@ -2,7 +2,6 @@
 #include <string.h>
 #include "mod_slave_rtu.h"
 #include "crc.h"
-#include "timestamper.h"	// small hack for super-fast CLOCK-RESET / SYNC
 
 //MODBUS commands
 #define MODBUS_OPCODE_READ_OUT_REGS     0x03
@@ -305,17 +304,6 @@ void ModSlaveRxDoneCallback(modSlaveStack_t* mstack, const uint8_t* msg, uint16_
                 // copy data only if original msg is somewhere else than internal buffer
                 memcpy((uint8_t*)mstack->message, msg, len);
             }
-
-            // fast-track: CLOCK-RESET / SYNC message
-            // --->
-            if (mstack->messageLast == 12 &&
-                memcmp((uint8_t*)mstack->message, "\x00\x10\xff\xfe\x00\x02\x04\x00\x00\x00\x00\x3c\x6f", 13) == 0)
-            {
-                timestamper_deinit();
-                timestamper_init();
-                mstack->status = eMOD_S_STATE_STANDBY;
-            }
-            // <---
         }
     }
 }
