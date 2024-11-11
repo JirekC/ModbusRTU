@@ -67,6 +67,7 @@ typedef uint8_t (*pfModSGetReg_t) (modSlaveStack_t* mstack, uint16_t regAddr, ui
  */
 typedef uint8_t (*pfModSSetReg_t) (modSlaveStack_t* mstack, uint16_t regAddr, uint16_t regValue);
 
+#ifdef MODBUS_USER_COMMANDS
 /**
  * @brief   User will pass pointer to function that store packet from local FIFO to @b buffer and its lenth to @b length
  * @warning Maximum length of single packet is 251 Bytes
@@ -81,7 +82,9 @@ typedef uint8_t (*pfModSGetPacket_t) (modSlaveStack_t* mstack, uint8_t* buffer, 
  * @return  0 if everything OK or @ref ModbusErrors code if fails (e.g. register doesn't exists)
  */
 typedef uint8_t (*pfModSSetPacket_t) (modSlaveStack_t* mstack, const uint8_t* buffer, uint16_t length);
+#endif
 /** @} */
+
 
 /**
  * @brief   Modbus slave stack structure. Pass pointer to this structure to each ModSlave function.
@@ -98,8 +101,10 @@ struct modSlaveStack_s
     pfModSSendAns_t             pfSendAns;      ///< send answer function
     pfModSGetReg_t              pfGetReg;       ///< get register function
     pfModSSetReg_t              pfSetReg;       ///< set register function
+#ifdef MODBUS_USER_COMMANDS
     pfModSGetPacket_t           pfGetPacket;    ///< get packet from local FIFO to be sent to master
     pfModSSetPacket_t           pfSetPacket;    ///< store packet from incomming message to local FIFO
+#endif
 
     uint16_t volatile           messageLast;    ///< total lengh of MODBUS message - 1
     uint8_t                     message[257];   ///< the message

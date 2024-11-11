@@ -9,8 +9,10 @@
 #define MODBUS_OPCODE_WRITE_MULTI_REGS  0x10
 #define MODBUS_OPCODE_DIAGNOSTIC        0x08
 // custom user defined commands
-#define MODBUS_OPCODE_READ_DATA_PACKET  0x64
-#define MODBUS_OPCODE_WRITE_DATA_PACKET 0x65
+#ifdef MODBUS_USER_COMMANDS
+    #define MODBUS_OPCODE_READ_DATA_PACKET  0x64
+    #define MODBUS_OPCODE_WRITE_DATA_PACKET 0x65
+#endif
 
 int16_t ModSlaveInit (modSlaveStack_t* mstack)
 {
@@ -18,12 +20,16 @@ int16_t ModSlaveInit (modSlaveStack_t* mstack)
 
     //MODBUS engine
 
-    if (mstack->address == 0 ||
-        mstack->pfStandby == NULL ||
-        mstack->pfGetReg == NULL ||
-        mstack->pfSetReg == NULL ||
-        mstack->pfSendAns == NULL  )
-    {
+    if (   mstack->address == 0
+        || mstack->pfStandby == NULL
+        || mstack->pfGetReg == NULL
+        || mstack->pfSetReg == NULL
+        || mstack->pfSendAns == NULL
+#ifdef MODBUS_USER_COMMANDS
+        || mstack->pfGetPacket == NULL
+        || mstack->pfSetPacket = NULL
+#endif
+    ) {
         retval = -1; // wrong config
     }
     else
@@ -193,6 +199,7 @@ static int16_t ModSlaveProcessCommand(modSlaveStack_t* mstack)
             }
             break;
 
+#ifdef MODBUS_USER_COMMANDS
         case MODBUS_OPCODE_READ_DATA_PACKET:
             if (mstack->messageLast != 2)
             {
@@ -233,6 +240,7 @@ static int16_t ModSlaveProcessCommand(modSlaveStack_t* mstack)
                 mstack->messageLast = 2; // answer
             }
             break;
+#endif
 
         //unsupported opcode
         default:

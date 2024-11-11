@@ -15,12 +15,17 @@ extern "C" {
 #include <stdint.h>
 
 /**
- * @defgroup TimeAPI Time API includes
+ * @defgroup TimeAPI Time API includes & defines
  * It is here only for @ref ModbusMasterInternal. Feel free to change to any other API.
  * @{
  */
 #include "FreeRTOS.h"
 #include "task.h"
+
+#define MODBUS_RX_TIMEOUT           100     ///< in milliseconds
+#define MODBUS_TIME_T               TickType_t
+#define MODBUS_GET_TIME_MS          (xTaskGetTickCount() * (1000/configTICK_RATE_HZ))
+#define MODBUS_GET_TIME_ISR_MS      (xTaskGetTickCountFromISR() * (1000/configTICK_RATE_HZ))
 /** @} */
 
 /**
@@ -31,16 +36,6 @@ extern "C" {
 #define MODBUS_ERR_ILLEGAL_ADDRESS  0x02
 #define MODBUS_ERR_ILLEGAL_VALUE    0x03
 #define MODBUS_ERR_DEVICE_FAULT     0x04
-/** @} */
-
-/**
- * @defgroup ModbusMasterInternal
- * @{
- */
-#define MODBUS_RX_TIMEOUT           100     ///< in milliseconds
-#define MODBUS_TIME_T               TickType_t
-#define MODBUS_GET_TIME_MS          (xTaskGetTickCount() * (1000/configTICK_RATE_HZ))
-#define MODBUS_GET_TIME_ISR_MS      (xTaskGetTickCountFromISR() * (1000/configTICK_RATE_HZ))
 /** @} */
 
 /** MODBUS engine status flags **/
@@ -140,6 +135,7 @@ int16_t ModMasterReadRegs(modMasterStack_t* mstack, uint8_t modAddress, uint16_t
  */
 int16_t ModMasterWriteRegs(modMasterStack_t* mstack, uint8_t modAddress, uint16_t first, uint16_t num, const uint16_t* regs);
 
+#ifdef MODBUS_USER_COMMANDS
 /**
  * @brief               Initialize reading of one data packet (custom user defined Modbus operation) from slave device.
  *
@@ -165,6 +161,7 @@ int16_t ModMasterReadDataPacket(modMasterStack_t* mstack, uint8_t modAddress, ui
  *                      -3 HW error (next call of @ref ModMasterCheck() will report eMOD_M_STATE_HW_ERROR)
  */
 int16_t ModMasterWriteDataPacket(modMasterStack_t* mstack, uint8_t modAddress, uint8_t length, const uint8_t* data);
+#endif
 
 /**
  * @brief               Main function of Modbus stack. Has to be called periodically until operation is finished.

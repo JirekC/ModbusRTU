@@ -32,8 +32,8 @@ void U2RxCallback(UART_HandleTypeDef *huart)
     uint32_t error = HAL_UART_GetError(huart);
     uint16_t len = 257 - __HAL_DMA_GET_COUNTER(huart->hdmarx);
 
-    if (error & HAL_UART_ERROR_RTO) {
-        // RTO = complete message received
+    if (error == HAL_UART_ERROR_RTO) {
+        // RTO = complete message received, this is not error
         ModMasterRxDoneCallback(&mstack, (uint8_t*)mstack.message, len);
     } else {
         // other error
@@ -117,6 +117,8 @@ int main(void)
 
 
 ## Another example of usage of SLAVE stack (STM32 HAL used)
+Please note, that due to super-simple nature of this stack, pfGetReg() and pfSetReg() callbacks are called per register. It means, that if write operation to single register fails (pfSetReg() returns one of ModbusErrors code), error response is sent to master immediatelly. Values of registers written before are untouched but no write operation is performed on subsequent registers.
+*Example*: Master sends write command with first register address of 10 and 4 data values to write: 0x1111, 0x2222, 0x3333, 0x4444. Expected result is: reg. 10 == 0x1111, reg. 11 == 0x2222 etc. But if write to let say reg. 11 fails, nothing is written to regs 12 and 13.
 ~~~
 #define LAST_MODBUS_REGISTER 229
 #define MY_MODBUS_ADDRESS    1
@@ -132,15 +134,15 @@ void U2RxCallback(UART_HandleTypeDef *huart)
     uint32_t error = HAL_UART_GetError(huart);
     uint16_t len = 257 - __HAL_DMA_GET_COUNTER(huart->hdmarx);
 
-    if (error & HAL_UART_ERROR_RTO) {
-        // RTO = complete message received
+    if (error == HAL_UART_ERROR_RTO) {
+        // RTO = complete message received, this is not error
         ModSlaveRxDoneCallback(&myModbusStack, (uint8_t*)myModbusStack.message, len);
     } else {
         // other error
         // OR no error, but full buffer (257 B) was received = overflow
         ModSlaveRxErrorCallback(&myModbusStack);
     }
-    HAL_UART_AbortReceive(&huart2); // disable interrupts
+    HAL_UART_AbortReceive(huart); // disable interrupts
 }
 
 void U2TxCallback(UART_HandleTypeDef *huart)

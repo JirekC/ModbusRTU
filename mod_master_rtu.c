@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "mod_master_rtu.h"
-#include <crc.h>
+#include "crc.h"
 
 // MODBUS commands
 #define MODBUS_OPCODE_READ_OUT_REGS     0x03
@@ -9,8 +9,10 @@
 #define MODBUS_OPCODE_WRITE_MULTI_REGS  0x10
 #define MODBUS_OPCODE_DIAGNOSTIC        0x08
 // custom user defined commands
-#define MODBUS_OPCODE_READ_DATA_PACKET  0x64
-#define MODBUS_OPCODE_WRITE_DATA_PACKET 0x65
+#ifdef MODBUS_USER_COMMANDS
+    #define MODBUS_OPCODE_READ_DATA_PACKET  0x64
+    #define MODBUS_OPCODE_WRITE_DATA_PACKET 0x65
+#endif
 
 int16_t ModMasterInit (modMasterStack_t* mstack)
 {
@@ -113,6 +115,7 @@ int16_t ModMasterWriteRegs(modMasterStack_t* mstack, uint8_t modAddress, uint16_
     return ModMasterSend(mstack);
 }
 
+#ifdef MODBUS_USER_COMMANDS
 int16_t ModMasterReadDataPacket(modMasterStack_t* mstack, uint8_t modAddress, uint8_t* length, uint8_t* data)
 {
     if( mstack->status != eMOD_M_STATE_STANDBY )
@@ -159,6 +162,7 @@ int16_t ModMasterWriteDataPacket(modMasterStack_t* mstack, uint8_t modAddress, u
 
     return ModMasterSend(mstack);
 }
+#endif
 
 // process answer PDU - check if everything is OK
 static void ModMasterProcessAnswer(modMasterStack_t* mstack)
@@ -224,6 +228,7 @@ static void ModMasterProcessAnswer(modMasterStack_t* mstack)
                 }
                 break;
 
+#ifdef MODBUS_USER_COMMANDS
             case MODBUS_OPCODE_READ_DATA_PACKET:
                 if (mstack->messageLast < 2 ||
                     mstack->messageLast != (2 + mstack->message[2]))
@@ -252,6 +257,7 @@ static void ModMasterProcessAnswer(modMasterStack_t* mstack)
                     mstack->status = eMOD_M_STATE_PROCESSED;
                 }
                 break;
+#endif
 
             default:
                 // something very bad happend
